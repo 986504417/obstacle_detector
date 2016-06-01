@@ -11,6 +11,9 @@ import numpy as np
 import rospy
 from obstacle_detector.msg import *
 
+img_width = 1296
+img_height = 972
+
 def switch_to_octant_zero(theta, p):
     step = 6.28/8.0
 
@@ -62,14 +65,19 @@ def detect_collision_in_ray(image, theta, p1, p2):
     line_pos = []
     line_col = []
     y = p1c[1]
-    for x in range(p1c[0], p2c[0]-1):
-        line_pos.append(switch_from_octant_zero(theta, (x,y)))
-        line_col.append(image[line_pos[-1][1]][line_pos[-1][0]])
+    if y < img_height:
+        for x in range(p1c[0], p2c[0]-1):
+            if x < img_width:
+                line_pos.append(switch_from_octant_zero(theta, (x,y)))
+                if line_pos[-1][1] < img_height and line_pos[-1][0] < img_width:
+                    line_col.append(image[line_pos[-1][1]][line_pos[-1][0]])
+                else:
+                    line_col.append(0.0)
 
-        if D >= 0:
-            y += 1
-            D -= dx
-        D += dy
+                if D >= 0:
+                    y += 1
+                    D -= dx
+                D += dy
 
     filter = [-1,-1,-1,-1,0,1,1,1,1]
     line_grad =  np.convolve(line_col, filter, 'same')
@@ -79,7 +87,7 @@ def detect_collision_in_ray(image, theta, p1, p2):
                 #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
         else:
-            if val > 200 and idx > 5 and idx < line_grad.size-10:
+            if val > 100 and idx > 5 and idx < line_grad.size-10:
                 #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
 
@@ -89,10 +97,10 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
 
     rospy.init_node('obstacle_detector', anonymous=False)
-    pub = rospy.Publisher('obstacle', ObstacleLocation, queue_size=10)
+    pub = rospy.Publisher('obstacle', ObstacleArray, queue_size=1)
 
     with PiCamera() as camera:
-        camera.resolution = (1024,768)
+        camera.resolution = (img_width,img_height)
         camera.ISO = 100
         camera.sa = 100
         camera.awb = "flash"
@@ -106,7 +114,7 @@ if __name__ == '__main__':
         camera.capture(raw_capture, format="bgr")
         image = raw_capture.array
         image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        circles = cv2.HoughCircles(image_gray, cv2.cv.CV_HOUGH_GRADIENT, 1, 200, param1=50, param2=40, minRadius=10, maxRadius=230)
+        circles = cv2.HoughCircles(image_gray, cv2.cv.CV_HOUGH_GRADIENT, 1, 200, param1=50, param2=40, minRadius=10, maxRadius=180)
         raw_capture.truncate(0)
 
         if circles is not None:
@@ -129,6 +137,11 @@ if __name__ == '__main__':
             for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
                 image = frame.array
                 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                
+                #image_edge = cv2.Canny(image,50,200)
+                #kernel = np.ones((7,7),np.uint8)
+                #image_edge = cv2.erode(image_edge,kernel,iterations = 1)
+
 
                 if options.debug_on:
                     cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
@@ -155,7 +168,7 @@ if __name__ == '__main__':
                     cv2.imshow("DEBUG", image)
                     key = cv2.waitKey(1) & 0xFF
 
-                raw_capture.truncate(0)
+                    if key == ord("q"):
+                        break
 
-                if key == ord("q"):
-                    break
+                raw_capture.truncate(0)
