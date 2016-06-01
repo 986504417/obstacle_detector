@@ -132,8 +132,9 @@ if __name__ == '__main__':
 
                         pub.publish(msg)
 
-            cv2.circle(image, collision_pos, 6, (255,0,0), 1)
-            cv2.imshow("derp", image)
+                        cv2.circle(image, collision_pos, 6, (255,0,0), 1)
+
+            cv2.imshow("DEBUG", image)
             key = cv2.waitKey(1) & 0xFF
 
             raw_capture.truncate(0)
