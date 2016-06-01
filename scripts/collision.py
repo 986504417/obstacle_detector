@@ -112,35 +112,44 @@ if __name__ == '__main__':
         if circles is not None:
             x, y, r = circles[0][0]
 
+            p1x = int(x + r*1.2)
+            p1y = int(y)
+            p2x = int(x + r*2.25)
+            p2y = int(y)
+
+            lines = []
+            for theta in np.linspace(0.0, 6.28, 50, False):
+                p1xr = int( np.cos(theta) * (p1x - x) - np.sin(theta) * (p1y - y) + x )
+                p1yr = int( np.sin(theta) * (p1x - x) + np.cos(theta) * (p1y - y) + y )
+                p2xr = int( np.cos(theta) * (p2x - x) - np.sin(theta) * (p2y - y) + x )
+                p2yr = int( np.sin(theta) * (p2x - x) + np.cos(theta) * (p2y - y) + y )
+
+                lines.append( (theta, p1xr, p1yr, p2xr, p2yr) )
+
             for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
                 image = frame.array
                 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
                 if options.debug_on:
                     cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
-                p1x = int(x + r*1.2)
-                p1y = int(y)
-                p2x = int(x + r*2.25)
-                p2y = int(y)
 
-                for theta in np.linspace(0.0, 6.28, 50, False):
-                    p1xr = int( np.cos(theta) * (p1x - x) - np.sin(theta) * (p1y - y) + x )
-                    p1yr = int( np.sin(theta) * (p1x - x) + np.cos(theta) * (p1y - y) + y )
-                    p2xr = int( np.cos(theta) * (p2x - x) - np.sin(theta) * (p2y - y) + x )
-                    p2yr = int( np.sin(theta) * (p2x - x) + np.cos(theta) * (p2y - y) + y )
-
-                    collision_pos = detect_collision_in_ray(image_gray, theta, (p1xr,p1yr), (p2xr,p2yr))
+                obstacles = []
+                for line in lines:
+                    collision_pos = detect_collision_in_ray(image_gray, line[0], (line[1],line[2]), (line[3],line[4]))
 
                     if collision_pos is not None:
-                        msg = ObstacleLocation()
-                        msg.centre = (x,y)
-                        msg.theta = theta
-                        msg.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
-
-                        pub.publish(msg)
+                        obstacle = ObstacleLocation()
+                        obstacle.centre = (x,y)
+                        obstacle.theta = line[0]
+                        obstacle.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
+                        obstacles.append(obstacle)
 
                         if options.debug_on:
                             cv2.circle(image, collision_pos, 6, (0,0,255), 1)
+
+                msg = ObstacleArray()
+                msg.obstacles = obstacles
+                pub.publish(msg)
 
                 if options.debug_on:
                     cv2.imshow("DEBUG", image)
