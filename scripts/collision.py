@@ -14,9 +14,9 @@ def switch_to_octant_zero(theta, p):
     step = 6.28/8.0
 
     if theta < step and theta >= 0.0:
-            return p
+        return p
     if theta < step*2.0 and theta >= step:
-            return (p[1],p[0])
+        return (p[1],p[0])
     if theta < step*3.0 and theta >= step*2.0:
         return (p[1],-p[0])
     if theta < step*4.0 and theta >= step*3.0:
@@ -34,21 +34,21 @@ def switch_from_octant_zero(theta, p):
     step = 6.28/8.0
 
     if theta < step and theta >= 0.0:
-            return p
+        return p
     if theta < step*2.0 and theta >= step:
-            return (p[1],p[0])
+        return (p[1],p[0])
     if theta < step*3.0 and theta >= step*2.0:
-            return (-p[1],p[0])
+        return (-p[1],p[0])
     if theta < step*4.0 and theta >= step*3.0:
-            return (-p[0],p[1])
+        return (-p[0],p[1])
     if theta < step*5.0 and theta >= step*4.0:
-            return (-p[0],-p[1])
+        return (-p[0],-p[1])
     if theta < step*6.0 and theta >= step*5.0:
-            return (-p[1],-p[0])
+        return (-p[1],-p[0])
     if theta < step*7.0 and theta >= step*6.0:
-            return (p[1],-p[0])
+        return (p[1],-p[0])
     if theta < step*8.0 and theta >= step*7.0:
-            return (p[0],-p[1])
+        return (p[0],-p[1])
 
 
 def detect_collision_in_ray(image, theta, p1, p2):
@@ -74,16 +74,16 @@ def detect_collision_in_ray(image, theta, p1, p2):
     line_grad =  np.convolve(line_col, filter, 'same')
     for idx, val in enumerate(line_grad):
         if theta > 3.49:
-            if np.abs(val) > 100 and idx > 60 and idx < line_grad.size-10:
+            if val < -100 and idx > 60 and idx < line_grad.size-10:
                 #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
         else:
-            if np.abs(val) > 200 and idx > 5 and idx < line_grad.size-10:
+            if val < -200 and idx > 5 and idx < line_grad.size-10:
                 #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
 
 if __name__ == '__main__':
-    rospy.init_node('obstacle_detector', anonymous=True)
+    rospy.init_node('obstacle_detector', anonymous=False)
     pub = rospy.Publisher('obstacle', ObstacleLocation, queue_size=10)
 
     with PiCamera() as camera:
@@ -120,8 +120,8 @@ if __name__ == '__main__':
                 for theta in np.linspace(0.0, 6.28, 50, False):
                     p1xr = int( np.cos(theta) * (p1x - x) - np.sin(theta) * (p1y - y) + x )
                     p1yr = int( np.sin(theta) * (p1x - x) + np.cos(theta) * (p1y - y) + y )
-                    p2xr = int( np.cos(theta) * (p2x - x) - np.sin(theta) * (p2y - y) + x  )
-                    p2yr = int( np.sin(theta) * (p2x - x) + np.cos(theta) * (p2y - y) + y  )
+                    p2xr = int( np.cos(theta) * (p2x - x) - np.sin(theta) * (p2y - y) + x )
+                    p2yr = int( np.sin(theta) * (p2x - x) + np.cos(theta) * (p2y - y) + y )
 
                     collision_pos = detect_collision_in_ray(image_gray, theta, (p1xr,p1yr), (p2xr,p2yr))
 
