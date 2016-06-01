@@ -104,13 +104,14 @@ if __name__ == '__main__':
         circles = cv2.HoughCircles(image_gray, cv2.cv.CV_HOUGH_GRADIENT, 1, 200, param1=50, param2=40, minRadius=10, maxRadius=230)
         raw_capture.truncate(0)
 
-        for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
-            image = frame.array
-            image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if circles is not None:
+            x, y, r = circles[0][0]
 
-            if circles is not None:
-                x, y, r = circles[0][0]
-                cv2.circle(image, (x,y), r, (0,255,0), 2)
+            for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
+                image = frame.array
+                image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+                cv2.circle(image, (x,y), r*1.2, (0,255,0), 2)
                 p1x = int(x + r*1.2)
                 p1y = int(y)
                 p2x = int(x + r*2.25)
@@ -134,10 +135,10 @@ if __name__ == '__main__':
 
                         cv2.circle(image, collision_pos, 6, (255,0,0), 1)
 
-            cv2.imshow("DEBUG", image)
-            key = cv2.waitKey(1) & 0xFF
+                cv2.imshow("DEBUG", image)
+                key = cv2.waitKey(1) & 0xFF
 
-            raw_capture.truncate(0)
+                raw_capture.truncate(0)
 
-            if key == ord("q"):
-                break
+                if key == ord("q"):
+                    break
