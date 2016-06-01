@@ -111,7 +111,7 @@ if __name__ == '__main__':
                 image = frame.array
                 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-                cv2.circle(image, (x,y), r*1.2, (0,255,0), 2)
+                cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
                 p1x = int(x + r*1.2)
                 p1y = int(y)
                 p2x = int(x + r*2.25)
