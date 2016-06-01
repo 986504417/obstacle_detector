@@ -11,12 +11,12 @@ import rospy
 from obstacle_detector.msg import *
 
 def switch_to_octant_zero(theta, p):
-        step = 6.28/8.0
+    step = 6.28/8.0
 
-        if theta < step and theta >= 0.0:
-                return p
-        if theta < step*2.0 and theta >= step:
-                return (p[1],p[0])
+    if theta < step and theta >= 0.0:
+            return p
+    if theta < step*2.0 and theta >= step:
+            return (p[1],p[0])
     if theta < step*3.0 and theta >= step*2.0:
         return (p[1],-p[0])
     if theta < step*4.0 and theta >= step*3.0:
@@ -31,24 +31,24 @@ def switch_to_octant_zero(theta, p):
         return (p[0],-p[1])
 
 def switch_from_octant_zero(theta, p):
-        step = 6.28/8.0
+    step = 6.28/8.0
 
-        if theta < step and theta >= 0.0:
-                return p
-        if theta < step*2.0 and theta >= step:
-                return (p[1],p[0])
-        if theta < step*3.0 and theta >= step*2.0:
-                return (-p[1],p[0])
-        if theta < step*4.0 and theta >= step*3.0:
-                return (-p[0],p[1])
-        if theta < step*5.0 and theta >= step*4.0:
-                return (-p[0],-p[1])
-        if theta < step*6.0 and theta >= step*5.0:
-                return (-p[1],-p[0])
-        if theta < step*7.0 and theta >= step*6.0:
-                return (p[1],-p[0])
-        if theta < step*8.0 and theta >= step*7.0:
-                return (p[0],-p[1])
+    if theta < step and theta >= 0.0:
+            return p
+    if theta < step*2.0 and theta >= step:
+            return (p[1],p[0])
+    if theta < step*3.0 and theta >= step*2.0:
+            return (-p[1],p[0])
+    if theta < step*4.0 and theta >= step*3.0:
+            return (-p[0],p[1])
+    if theta < step*5.0 and theta >= step*4.0:
+            return (-p[0],-p[1])
+    if theta < step*6.0 and theta >= step*5.0:
+            return (-p[1],-p[0])
+    if theta < step*7.0 and theta >= step*6.0:
+            return (p[1],-p[0])
+    if theta < step*8.0 and theta >= step*7.0:
+            return (p[0],-p[1])
 
 
 def detect_collision_in_ray(image, theta, p1, p2):
