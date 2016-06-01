@@ -124,12 +124,13 @@ if __name__ == '__main__':
 
                     collision_pos = detect_collision_in_ray(image_gray, theta, (p1xr,p1yr), (p2xr,p2yr))
 
-                    msg = ObstacleLocation()
-                    msg.centre = (x,y)
-                    msg.theta = theta
-                    msg.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
+                    if collision_pos is not None:
+                        msg = ObstacleLocation()
+                        msg.centre = (x,y)
+                        msg.theta = theta
+                        msg.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
 
-                    pub.publish(msg)
+                        pub.publish(msg)
 
             cv2.circle(image, collision_pos, 6, (255,0,0), 1)
             cv2.imshow("derp", image)
