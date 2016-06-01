@@ -74,11 +74,11 @@ def detect_collision_in_ray(image, theta, p1, p2):
     line_grad =  np.convolve(line_col, filter, 'same')
     for idx, val in enumerate(line_grad):
         if theta > 3.49:
-            if val < -100 and idx > 60 and idx < line_grad.size-10:
+            if val > 100 and idx > 60 and idx < line_grad.size-10:
                 #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
         else:
-            if val < -200 and idx > 5 and idx < line_grad.size-10:
+            if val > 200 and idx > 5 and idx < line_grad.size-10:
                 #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
                         pub.publish(msg)
 
-                        cv2.circle(image, collision_pos, 6, (255,0,0), 1)
+                        cv2.circle(image, collision_pos, 6, (0,0,255), 1)
 
                 cv2.imshow("DEBUG", image)
                 key = cv2.waitKey(1) & 0xFF
