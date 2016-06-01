@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# Author: Daniel Cook <dac456@mun.ca>
+
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 from optparse import OptionParser
@@ -11,9 +13,12 @@ import numpy as np
 import rospy
 from obstacle_detector.msg import *
 
+# TODO: these should come from the parameter server
 img_width = 1296
 img_height = 972
 
+# Transform point on a line to zeroth octant
+# Needed for input to Bresenham line algorithm
 def switch_to_octant_zero(theta, p):
     step = 6.28/8.0
 
@@ -34,6 +39,8 @@ def switch_to_octant_zero(theta, p):
     if theta < step*8.0 and theta >= step*7.0:
         return (p[0],-p[1])
 
+# Transform point on a line from the zeroth octant
+# Needed for output from Bresenham line algorithm
 def switch_from_octant_zero(theta, p):
     step = 6.28/8.0
 
@@ -54,14 +61,22 @@ def switch_from_octant_zero(theta, p):
     if theta < step*8.0 and theta >= step*7.0:
         return (p[0],-p[1])
 
-
+# Given a grayscale image, two line end points and a line angle
+# build a line using Bresenham algorithm
+# Image pixels added to line are then convolved to find gradient over the line
+# Pixels exceeding threshold in the line gradient are returned as obstacle locations
 def detect_collision_in_ray(image, theta, p1, p2):
+    # Input line points are warped to octant zero in order to generate the line
+    # Pixel positions are warped back to the original octant as they are appended
+    # using switch_from_octant_zero
     p1c = switch_to_octant_zero(theta, p1)
     p2c = switch_to_octant_zero(theta, p2)
     dx = (p2c[0] - p1c[0])
     dy = (p2c[1] - p1c[1])
     D = dy - dx
 
+    # March using Bresenham algorithm, appending position and intensity as we go
+    # OpenCV's LineIterator only returns intensity, so we do this here instead
     line_pos = []
     line_col = []
     y = p1c[1]
@@ -79,16 +94,19 @@ def detect_collision_in_ray(image, theta, p1, p2):
                     D -= dx
                 D += dy
 
+    # Convolve with filter to find image gradient over the line
     filter = [-1,-1,-1,-1,0,1,1,1,1]
     line_grad =  np.convolve(line_col, filter, 'same')
+
     for idx, val in enumerate(line_grad):
+        # This portion of the image is obscured by the robot
+        # Pick a point further away to start considering edges
         if theta > 3.49:
             if val > 100 and idx > 60 and idx < line_grad.size-10:
-                #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
+        # The rest of the image has a tighter starting boundary
         else:
             if val > 100 and idx > 5 and idx < line_grad.size-10:
-                #cv2.circle(image, line_pos[idx], 6, (255,0,0), 1)
                 return line_pos[idx]
 
 if __name__ == '__main__':
@@ -100,17 +118,19 @@ if __name__ == '__main__':
     pub = rospy.Publisher('obstacle', ObstacleArray, queue_size=1)
 
     with PiCamera() as camera:
+        # Camera settings
+        # I don't know what they mean
         camera.resolution = (img_width,img_height)
         camera.ISO = 100
         camera.sa = 100
         camera.awb = "flash"
         camera.co = 100
 
-
         raw_capture = PiRGBArray(camera)
 
         time.sleep(0.1)
 
+        # Before doing anything, capture the first frame and find the inner circle
         camera.capture(raw_capture, format="bgr")
         image = raw_capture.array
         image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -120,11 +140,14 @@ if __name__ == '__main__':
         if circles is not None:
             x, y, r = circles[0][0]
 
+            # Lines start offset slightly from the inner circle
+            # Assume endpoint is another offset from inner circle
             p1x = int(x + r*1.2)
             p1y = int(y)
             p2x = int(x + r*2.25)
             p2y = int(y)
 
+            # Generate lines around our area of interest
             lines = []
             for theta in np.linspace(0.0, 6.28, 50, False):
                 p1xr = int( np.cos(theta) * (p1x - x) - np.sin(theta) * (p1y - y) + x )
@@ -134,18 +157,22 @@ if __name__ == '__main__':
 
                 lines.append( (theta, p1xr, p1yr, p2xr, p2yr) )
 
+            # Once we have the inner circle and a set of lines, we can start finding objects
             for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
                 image = frame.array
                 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                
+
                 #image_edge = cv2.Canny(image,50,200)
                 #kernel = np.ones((7,7),np.uint8)
                 #image_edge = cv2.erode(image_edge,kernel,iterations = 1)
 
-
                 if options.debug_on:
                     cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
 
+                # Iterate over each line and detect edges
+                # detect_collision_in_ray will return the first obstacle encountered on a line
+                # The angle and distance from image centre are stored to describe the obstacle position (polar coords)
+                # Image centre is also reported
                 obstacles = []
                 for line in lines:
                     collision_pos = detect_collision_in_ray(image_gray, line[0], (line[1],line[2]), (line[3],line[4]))
@@ -160,6 +187,7 @@ if __name__ == '__main__':
                         if options.debug_on:
                             cv2.circle(image, collision_pos, 6, (0,0,255), 1)
 
+                # Publish array of detected obstacles for others to have fun with
                 msg = ObstacleArray()
                 msg.obstacles = obstacles
                 pub.publish(msg)
