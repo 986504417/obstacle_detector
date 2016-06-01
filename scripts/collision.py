@@ -3,6 +3,7 @@
 
 from picamera.array import PiRGBArray
 from picamera import PiCamera
+from optparse import OptionParser
 import time
 import cv2
 import cv
@@ -83,6 +84,10 @@ def detect_collision_in_ray(image, theta, p1, p2):
                 return line_pos[idx]
 
 if __name__ == '__main__':
+    parser = OptionParser()
+    parser.add_option("-d", "--debug", dest="debug_on", help="enable debug output", default=False, action='store_true')
+    (options, args) = parser.parse_args()
+
     rospy.init_node('obstacle_detector', anonymous=False)
     pub = rospy.Publisher('obstacle', ObstacleLocation, queue_size=10)
 
@@ -111,7 +116,8 @@ if __name__ == '__main__':
                 image = frame.array
                 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-                cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
+                if options.debug_on:
+                    cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
                 p1x = int(x + r*1.2)
                 p1y = int(y)
                 p2x = int(x + r*2.25)
@@ -133,10 +139,12 @@ if __name__ == '__main__':
 
                         pub.publish(msg)
 
-                        cv2.circle(image, collision_pos, 6, (0,0,255), 1)
+                        if options.debug_on:
+                            cv2.circle(image, collision_pos, 6, (0,0,255), 1)
 
-                cv2.imshow("DEBUG", image)
-                key = cv2.waitKey(1) & 0xFF
+                if options.debug_on:
+                    cv2.imshow("DEBUG", image)
+                    key = cv2.waitKey(1) & 0xFF
 
                 raw_capture.truncate(0)
 
