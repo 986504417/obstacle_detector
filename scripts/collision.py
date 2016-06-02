@@ -12,6 +12,7 @@ import cv
 import numpy as np
 import rospy
 from obstacle_detector.msg import *
+from bubblescope_property_service.srv import &
 
 # TODO: these should come from the parameter server
 img_width = 1296
@@ -117,86 +118,74 @@ if __name__ == '__main__':
     rospy.init_node('obstacle_detector', anonymous=False)
     pub = rospy.Publisher('obstacle', ObstacleArray, queue_size=1)
 
-    with PiCamera() as camera:
-        # Camera settings
-        # I don't know what they mean
-        camera.resolution = (img_width,img_height)
-        camera.ISO = 100
-        camera.sa = 100
-        camera.awb = "flash"
-        camera.co = 100
+    # Fetch bubblescope information from the service
+    rospy.wait_for_service('get_bubblescope_properties')
+    get_bubblescope_properties = rospy.ServiceProxy('get_bubblescope_properties', GetBubblescopeProperties)
+    res = get_bubblescope_properties()
 
-        raw_capture = PiRGBArray(camera)
+    if res is not None:
+        x = res.center[0]
+        y = res.center[1]
+        inner_rad = res.inner_radius
+        outer_rad = res.outer_radius
 
-        time.sleep(0.1)
+        # Lines start offset slightly from the inner circle
+        # Assume endpoint is another offset from inner circle
+        p1x = int(x + inner_rad)
+        p1y = int(y)
+        p2x = int(x + outer_rad)
+        p2y = int(y)
 
-        # Before doing anything, capture the first frame and find the inner circle
-        camera.capture(raw_capture, format="bgr")
-        image = raw_capture.array
-        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        circles = cv2.HoughCircles(image_gray, cv2.cv.CV_HOUGH_GRADIENT, 1, 200, param1=50, param2=40, minRadius=10, maxRadius=180)
-        raw_capture.truncate(0)
+        # Generate lines around our area of interest
+        lines = []
+        for theta in np.linspace(0.0, 6.28, 50, False):
+            p1xr = int( np.cos(theta) * (p1x - x) - np.sin(theta) * (p1y - y) + x )
+            p1yr = int( np.sin(theta) * (p1x - x) + np.cos(theta) * (p1y - y) + y )
+            p2xr = int( np.cos(theta) * (p2x - x) - np.sin(theta) * (p2y - y) + x )
+            p2yr = int( np.sin(theta) * (p2x - x) + np.cos(theta) * (p2y - y) + y )
 
-        if circles is not None:
-            x, y, r = circles[0][0]
+            lines.append( (theta, p1xr, p1yr, p2xr, p2yr) )
 
-            # Lines start offset slightly from the inner circle
-            # Assume endpoint is another offset from inner circle
-            p1x = int(x + r*1.2)
-            p1y = int(y)
-            p2x = int(x + r*2.25)
-            p2y = int(y)
+        # Once we have the inner circle and a set of lines, we can start finding objects
+        for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
+            image = frame.array
+            image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-            # Generate lines around our area of interest
-            lines = []
-            for theta in np.linspace(0.0, 6.28, 50, False):
-                p1xr = int( np.cos(theta) * (p1x - x) - np.sin(theta) * (p1y - y) + x )
-                p1yr = int( np.sin(theta) * (p1x - x) + np.cos(theta) * (p1y - y) + y )
-                p2xr = int( np.cos(theta) * (p2x - x) - np.sin(theta) * (p2y - y) + x )
-                p2yr = int( np.sin(theta) * (p2x - x) + np.cos(theta) * (p2y - y) + y )
+            #image_edge = cv2.Canny(image,50,200)
+            #kernel = np.ones((7,7),np.uint8)
+            #image_edge = cv2.erode(image_edge,kernel,iterations = 1)
 
-                lines.append( (theta, p1xr, p1yr, p2xr, p2yr) )
+            if options.debug_on:
+                cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
 
-            # Once we have the inner circle and a set of lines, we can start finding objects
-            for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
-                image = frame.array
-                image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            # Iterate over each line and detect edges
+            # detect_collision_in_ray will return the first obstacle encountered on a line
+            # The angle and distance from image centre are stored to describe the obstacle position (polar coords)
+            # Image centre is also reported
+            obstacles = []
+            for line in lines:
+                collision_pos = detect_collision_in_ray(image_gray, line[0], (line[1],line[2]), (line[3],line[4]))
 
-                #image_edge = cv2.Canny(image,50,200)
-                #kernel = np.ones((7,7),np.uint8)
-                #image_edge = cv2.erode(image_edge,kernel,iterations = 1)
+                if collision_pos is not None:
+                    obstacle = ObstacleLocation()
+                    obstacle.centre = (x,y)
+                    obstacle.theta = line[0]
+                    obstacle.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
+                    obstacles.append(obstacle)
 
-                if options.debug_on:
-                    cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
+                    if options.debug_on:
+                        cv2.circle(image, collision_pos, 6, (0,0,255), 1)
 
-                # Iterate over each line and detect edges
-                # detect_collision_in_ray will return the first obstacle encountered on a line
-                # The angle and distance from image centre are stored to describe the obstacle position (polar coords)
-                # Image centre is also reported
-                obstacles = []
-                for line in lines:
-                    collision_pos = detect_collision_in_ray(image_gray, line[0], (line[1],line[2]), (line[3],line[4]))
+            # Publish array of detected obstacles for others to have fun with
+            msg = ObstacleArray()
+            msg.obstacles = obstacles
+            pub.publish(msg)
 
-                    if collision_pos is not None:
-                        obstacle = ObstacleLocation()
-                        obstacle.centre = (x,y)
-                        obstacle.theta = line[0]
-                        obstacle.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
-                        obstacles.append(obstacle)
+            if options.debug_on:
+                cv2.imshow("DEBUG", image)
+                key = cv2.waitKey(1) & 0xFF
 
-                        if options.debug_on:
-                            cv2.circle(image, collision_pos, 6, (0,0,255), 1)
+                if key == ord("q"):
+                    break
 
-                # Publish array of detected obstacles for others to have fun with
-                msg = ObstacleArray()
-                msg.obstacles = obstacles
-                pub.publish(msg)
-
-                if options.debug_on:
-                    cv2.imshow("DEBUG", image)
-                    key = cv2.waitKey(1) & 0xFF
-
-                    if key == ord("q"):
-                        break
-
-                raw_capture.truncate(0)
+            raw_capture.truncate(0)
