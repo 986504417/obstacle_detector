@@ -12,7 +12,7 @@ import cv
 import numpy as np
 import rospy
 from obstacle_detector.msg import *
-from bubblescope_property_service.srv import &
+from bubblescope_property_service.srv import *
 
 # TODO: these should come from the parameter server
 img_width = 1296
@@ -124,8 +124,8 @@ if __name__ == '__main__':
     res = get_bubblescope_properties()
 
     if res is not None:
-        x = res.center[0]
-        y = res.center[1]
+        x = int(res.center[0])
+        y = int(res.center[1])
         inner_rad = res.inner_radius
         outer_rad = res.outer_radius
 
@@ -147,45 +147,56 @@ if __name__ == '__main__':
             lines.append( (theta, p1xr, p1yr, p2xr, p2yr) )
 
         # Once we have the inner circle and a set of lines, we can start finding objects
-        for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
-            image = frame.array
-            image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        with PiCamera() as camera:
+            camera.resolution = (img_width,img_height)
+            camera.ISO = 100
+            camera.sa = 100
+            camera.awb = "flash"
+            camera.co = 100
 
-            #image_edge = cv2.Canny(image,50,200)
-            #kernel = np.ones((7,7),np.uint8)
-            #image_edge = cv2.erode(image_edge,kernel,iterations = 1)
+            raw_capture = PiRGBArray(camera)
 
-            if options.debug_on:
-                cv2.circle(image, (x,y), int(r*1.2), (0,255,0), 2)
+            time.sleep(0.1)
+    
+            for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
+                image = frame.array
+                image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-            # Iterate over each line and detect edges
-            # detect_collision_in_ray will return the first obstacle encountered on a line
-            # The angle and distance from image centre are stored to describe the obstacle position (polar coords)
-            # Image centre is also reported
-            obstacles = []
-            for line in lines:
-                collision_pos = detect_collision_in_ray(image_gray, line[0], (line[1],line[2]), (line[3],line[4]))
+                #image_edge = cv2.Canny(image,50,200)
+                #kernel = np.ones((7,7),np.uint8)
+                #image_edge = cv2.erode(image_edge,kernel,iterations = 1)
 
-                if collision_pos is not None:
-                    obstacle = ObstacleLocation()
-                    obstacle.centre = (x,y)
-                    obstacle.theta = line[0]
-                    obstacle.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
-                    obstacles.append(obstacle)
+                if options.debug_on:
+                    cv2.circle(image, (x,y), int(inner_rad), (0,255,0), 2)
 
-                    if options.debug_on:
-                        cv2.circle(image, collision_pos, 6, (0,0,255), 1)
+                # Iterate over each line and detect edges
+                # detect_collision_in_ray will return the first obstacle encountered on a line
+                # The angle and distance from image centre are stored to describe the obstacle position (polar coords)
+                # Image centre is also reported
+                obstacles = []
+                for line in lines:
+                    collision_pos = detect_collision_in_ray(image_gray, line[0], (line[1],line[2]), (line[3],line[4]))
 
-            # Publish array of detected obstacles for others to have fun with
-            msg = ObstacleArray()
-            msg.obstacles = obstacles
-            pub.publish(msg)
+                    if collision_pos is not None:
+                        obstacle = ObstacleLocation()
+                        obstacle.centre = (x,y)
+                        obstacle.theta = line[0]
+                        obstacle.radius = np.sqrt( (collision_pos[0]-x)**2 + (collision_pos[1]-y)**2 )
+                        obstacles.append(obstacle)
 
-            if options.debug_on:
-                cv2.imshow("DEBUG", image)
-                key = cv2.waitKey(1) & 0xFF
+                        if options.debug_on:
+                            cv2.circle(image, collision_pos, 6, (0,0,255), 1)
 
-                if key == ord("q"):
-                    break
+                # Publish array of detected obstacles for others to have fun with
+                msg = ObstacleArray()
+                msg.obstacles = obstacles
+                pub.publish(msg)
 
-            raw_capture.truncate(0)
+                if options.debug_on:
+                    cv2.imshow("DEBUG", image)
+                    key = cv2.waitKey(1) & 0xFF
+
+                    if key == ord("q"):
+                        break
+
+                raw_capture.truncate(0)
